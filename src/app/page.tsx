@@ -1,30 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import { GameStateProp } from "./api/route";
 
 export default function Page() {
-  const suits = ["♠️", "♥️", "♦️", "♣️"];
-  const ranks = [
-    "A",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "J",
-    "Q",
-    "K",
-  ];
-  const initialDeck = suits
-    .map((suit) => ranks.map((rank) => ({ suit: suit, rank: rank })))
-    .flat();
-
-  const [deck, setDeck] = useState<{ suit: string; rank: string }[]>([]);
-  const [winner, setWinner] = useState<string>("");
   const [message, setMessage] = useState<string>("");
+  const [score, setScore] = useState<number>(0);
   const [playerHand, setPlayerHand] = useState<
     { suit: string; rank: string }[]
   >([]);
@@ -35,28 +15,25 @@ export default function Page() {
   const initGame = async () => {
     const response = await fetch("/api", { method: "GET" });
     const data = await response.json();
-    console.log("data", data);
 
+    setData(data);
+  };
+
+  const handleAction = async (action: string) => {
+    const response = await fetch("/api", {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+    const data = await response.json();
+
+    setData(data);
+  };
+
+  const setData = (data: GameStateProp) => {
     setPlayerHand(data.playerHand);
     setDealerHand(data.dealerHand);
     setMessage(data.message);
-  };
-
-  const handleHit = async () => {
-    // const response = await fetch("/api", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ action: "hit" }),
-    // });
-    // const data = await response.json();
-    // console.log("handleHit ", data);
-    // setPlayerHand(data.playerHand);
-    // setDealerHand(data.dealerHand);
-    // setMessage(data.message);
-  };
-
-  const handleStand = async () => {
- 
+    setScore(data.score);
   };
 
   useEffect(() => {
@@ -66,17 +43,19 @@ export default function Page() {
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="container mx-auto px-4">
-        {/* 标题区域 */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-800 mb-2 bg-clip-text bg-gradient-to-r from-purple-600 to-blue-500">
             🃏 Web3 Blackjack
           </h1>
           <h2
-            className={`text-xl font-semibold ${
-              winner === "player" ? "text-green-600" : "text-yellow-600"
+            className={`text-2xl font-semibold ${
+              message.includes("win") ? "text-green-600" : "text-red-600"
             } transition-colors`}
           >
-            {message}
+            <span className={score >= 0 ? "text-green-600" : "text-red-600"}>
+              Score: {score}
+            </span>
+            <span className="ml-5">{message}</span>
           </h2>
         </div>
 
@@ -153,7 +132,7 @@ export default function Page() {
             Your Hand
           </h3>
           <div className="flex gap-4 flex-wrap">
-            {playerHand.slice(0, 3).map((card, index) => (
+            {playerHand.slice(0, 4).map((card, index) => (
               <div
                 key={index}
                 className="relative w-28 h-44 bg-white rounded-lg border-2 border-gray-200 shadow-lg flex flex-col justify-between p-4 transition-all hover:scale-105"
@@ -214,26 +193,30 @@ export default function Page() {
           </div>
         </div>
 
-        {/* 操作按钮组 */}
         <div className="flex justify-center gap-4 mt-8">
-          <button
-            className="px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-            onClick={handleHit}
-          >
-            Hit
-          </button>
-          <button
-            className="px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-            onClick={handleStand}
-          >
-            Stand
-          </button>
-          <button
-            className="px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-            onClick={initGame}
-          >
-            Reset
-          </button>
+          {message === "" ? (
+            <>
+              <button
+                className="cursor-pointer px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                onClick={() => handleAction("hit")}
+              >
+                Hit
+              </button>
+              <button
+                className="cursor-pointer px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                onClick={() => handleAction("stand")}
+              >
+                Stand
+              </button>
+            </>
+          ) : (
+            <button
+              className="cursor-pointer px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+              onClick={initGame}
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
     </div>
