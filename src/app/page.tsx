@@ -14,11 +14,11 @@ export default function Page() {
     { suit: string; rank: string }[]
   >([]);
 
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const [isSigned, setIsSigned] = useState<boolean>(false);
 
   const initGame = async () => {
-    const response = await fetch("/api", { method: "GET" });
+    const response = await fetch(`/api?address=${address}`, { method: "GET" });
     const data = await response.json();
 
     setData(data);
@@ -27,7 +27,7 @@ export default function Page() {
   const handleAction = async (action: string) => {
     const response = await fetch("/api", {
       method: "POST",
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, address }),
     });
     const data = await response.json();
 
@@ -41,16 +41,14 @@ export default function Page() {
     setScore(data.score);
   };
 
-  useEffect(() => {
-    initGame();
-  }, []);
-
   const { signMessageAsync } = useSignMessage();
 
-  const handleSignIn = async () => {
+  const handleSign = async () => {
     try {
       const message = `Welcome to Web3 Blackjack! at ${new Date().toString()}`;
       const signature = await signMessageAsync({ message: message });
+
+      console.log("signature: ", signature);
 
       const response = await fetch("/api", {
         method: "POST",
@@ -64,39 +62,39 @@ export default function Page() {
 
       if (response.status === 200) {
         setIsSigned(true);
+        initGame();
         console.log("Sign in successfully");
-      }
-
-      if (!isSigned) {
-        return (
-          <div className="flex flex-col justify-center items-center gap-4 px-4 mb-10">
-            <ConnectButton />
-
-            <button
-              className="bg-amber-400 rounded-md p-2 cursor-pointer"
-              onClick={handleSignIn}
-            >
-              Sign with your wallet
-            </button>
-          </div>
-        );
       }
     } catch (error) {
       console.log("Sign in failed", error);
     }
   };
 
+  if (!isSigned) {
+    return (
+      <div className="h-screen w-full flex flex-col justify-center items-center gap-4">
+        <ConnectButton />
+
+        <div>
+          {isConnected ? (
+            <button
+              className="bg-amber-400 rounded-md p-2 cursor-pointer"
+              onClick={handleSign}
+            >
+              Sign with your wallet
+            </button>
+          ) : (
+            <p>Please connect your wallet first</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="flex flex-col justify-center items-center gap-4 px-4 mb-10">
         <ConnectButton />
-
-        <button
-          className="bg-amber-400 rounded-md p-2 cursor-pointer"
-          onClick={handleSignIn}
-        >
-          Sign with your wallet
-        </button>
       </div>
 
       <div className="container mx-auto px-4">

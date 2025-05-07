@@ -3,6 +3,7 @@
 
 import { verifyMessage } from "viem";
 import { verifySiweMessage } from "viem/siwe";
+import prisma from "@/lib/client";
 
 const suits = ["♠️", "♥️", "♦️", "♣️"];
 const ranks = [
@@ -57,7 +58,31 @@ function getRandomCard(deck: Card[], noOfCards: number): [Card[], Card[]] {
   return [randomCards, newDeck];
 }
 
-export function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const address = searchParams.get("address");
+
+  if (!address) {
+    return new Response(JSON.stringify({ message: "Invalid address" }), {
+      status: 400,
+    });
+  }
+
+  let player = await prisma.player.findUnique({
+    where: { address },
+  });
+
+  // if the player does not exist, create a new player
+  if (!player) {
+    player = await prisma.player.create({
+      data: { address, score: 0 },
+    });
+    console.log("创建player");
+  }
+
+  // initialize the game state
+  gameState.score = player.score;
+
   gameState.deck = [...initialDeck];
   gameState.dealerHand = [];
   gameState.playerHand = [];
@@ -69,6 +94,9 @@ export function GET() {
   gameState.dealerHand = dealerHand;
   gameState.playerHand = playerHand;
   gameState.deck = deckAfterPlayer;
+
+  try {
+  } catch (error) {}
 
   return new Response(
     JSON.stringify({
@@ -86,10 +114,10 @@ export function GET() {
 // handle the hit and stand and decide who is the winner
 export async function POST(request: Request) {
   const body = await request.json();
-  const { action } = body;
+  const { action, address } = body;
 
   if (action === "auth") {
-    const { address, message, signature } = body;
+    const { message, signature } = body;
     const isValid = await verifyMessage({ address, message, signature });
 
     if (!isValid) {
@@ -116,14 +144,6 @@ export async function POST(request: Request) {
           status: 200,
         }
       );
-    }
-
-    // return if the action is not hit or stand
-    const { action } = await request.json();
-    if (action !== "hit" && action !== "stand") {
-      return new Response(JSON.stringify({ message: "Invalid action" }), {
-        status: 400,
-      });
     }
 
     // hit: 21 - player wins black jack
@@ -177,6 +197,12 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    // update the player score
+    await prisma.player.update({
+      where: { address },
+      data: { score: gameState.score },
+    });
 
     return new Response(
       JSON.stringify({
