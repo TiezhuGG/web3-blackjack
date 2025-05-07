@@ -1,6 +1,9 @@
 // Start the game and get 2 random cards for dealer and player
 // handle the hit and stand and decide who is the winner
 
+import { verifyMessage } from "viem";
+import { verifySiweMessage } from "viem/siwe";
+
 const suits = ["♠️", "♥️", "♦️", "♣️"];
 const ranks = [
   "A",
@@ -82,6 +85,24 @@ export function GET() {
 
 // handle the hit and stand and decide who is the winner
 export async function POST(request: Request) {
+  const body = await request.json();
+  const { action } = body;
+
+  if (action === "auth") {
+    const { address, message, signature } = body;
+    const isValid = await verifyMessage({ address, message, signature });
+
+    if (!isValid) {
+      return new Response(JSON.stringify({ message: "Invalid signature" }), {
+        status: 400,
+      });
+    } else {
+      return new Response(JSON.stringify({ message: "Valid signature" }), {
+        status: 200,
+      });
+    }
+  }
+
   try {
     // return if the current game is finished
     if (gameState.message !== "") {

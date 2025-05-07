@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { GameStateProp } from "./api/route";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useAccount, useSignMessage } from "wagmi";
 
 export default function Page() {
   const [message, setMessage] = useState<string>("");
@@ -11,6 +13,9 @@ export default function Page() {
   const [dealerHand, setDealerHand] = useState<
     { suit: string; rank: string }[]
   >([]);
+
+  const { address } = useAccount();
+  const [isSigned, setIsSigned] = useState<boolean>(false);
 
   const initGame = async () => {
     const response = await fetch("/api", { method: "GET" });
@@ -40,8 +45,60 @@ export default function Page() {
     initGame();
   }, []);
 
+  const { signMessageAsync } = useSignMessage();
+
+  const handleSignIn = async () => {
+    try {
+      const message = `Welcome to Web3 Blackjack! at ${new Date().toString()}`;
+      const signature = await signMessageAsync({ message: message });
+
+      const response = await fetch("/api", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "auth",
+          address,
+          message,
+          signature,
+        }),
+      });
+
+      if (response.status === 200) {
+        setIsSigned(true);
+        console.log("Sign in successfully");
+      }
+
+      if (!isSigned) {
+        return (
+          <div className="flex flex-col justify-center items-center gap-4 px-4 mb-10">
+            <ConnectButton />
+
+            <button
+              className="bg-amber-400 rounded-md p-2 cursor-pointer"
+              onClick={handleSignIn}
+            >
+              Sign with your wallet
+            </button>
+          </div>
+        );
+      }
+    } catch (error) {
+      console.log("Sign in failed", error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 py-8">
+      <div className="flex flex-col justify-center items-center gap-4 px-4 mb-10">
+        <ConnectButton />
+
+        <button
+          className="bg-amber-400 rounded-md p-2 cursor-pointer"
+          onClick={handleSignIn}
+        >
+          Sign with your wallet
+        </button>
+      </div>
+
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-800 mb-2 bg-clip-text bg-gradient-to-r from-purple-600 to-blue-500">
