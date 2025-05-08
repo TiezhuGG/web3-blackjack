@@ -1,9 +1,11 @@
 // Start the game and get 2 random cards for dealer and player
 // handle the hit and stand and decide who is the winner
 
-import { verifyMessage } from "viem";
-import { verifySiweMessage } from "viem/siwe";
+import { createPublicClient, createWalletClient, http, verifyMessage } from "viem";
 import prisma from "@/lib/client";
+import jwt from "jsonwebtoken";
+import { hardhat } from "viem/chains";
+import { ABI, CONTRACT_ADDRESS } from "@/constants";
 
 const suits = ["♠️", "♥️", "♦️", "♣️"];
 const ranks = [
@@ -61,7 +63,6 @@ function getRandomCard(deck: Card[], noOfCards: number): [Card[], Card[]] {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const address = searchParams.get("address");
-
   if (!address) {
     return new Response(JSON.stringify({ message: "Invalid address" }), {
       status: 400,
@@ -72,12 +73,12 @@ export async function GET(request: Request) {
     where: { address },
   });
 
+
   // if the player does not exist, create a new player
   if (!player) {
     player = await prisma.player.create({
       data: { address, score: 0 },
     });
-    console.log("创建player");
   }
 
   // initialize the game state
@@ -125,10 +126,34 @@ export async function POST(request: Request) {
         status: 400,
       });
     } else {
-      return new Response(JSON.stringify({ message: "Valid signature" }), {
-        status: 200,
+      const token = jwt.sign({ address }, process.env.JWT_SECRET!, {
+        expiresIn: "1h",
       });
+
+      return new Response(
+        JSON.stringify({ token, message: "Valid signature" }),
+        {
+          status: 200,
+        }
+      );
     }
+  }
+
+  // check if the token is valid
+  const header = request.headers.get("Authorization");
+  if (!header || !header.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ message: "Unauthorized" }), {
+      status: 401,
+    });
+  }
+  const token = header.split(" ")[1];
+  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+    address: string;
+  };
+  if (decoded.address.toLocaleLowerCase() !== address.toLocaleLowerCase()) {
+    return new Response(JSON.stringify({ message: "Invalid token" }), {
+      status: 401,
+    });
   }
 
   try {
@@ -196,6 +221,30 @@ export async function POST(request: Request) {
           gameState.message = "Draw!";
         }
       }
+    } else if (action === "sync_score") {
+      // update the player score from the contract
+      const client = createPublicClient({
+        chain: hardhat,
+        transport: http(),
+      });
+
+      // read the score from the contract
+      const chainScore = await client.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: ABI,
+        functionName: "scores",
+        args: [address],
+      });
+
+      // update the player score in the database
+      const player = await prisma.player.update({
+        where: { address },
+        data: { score: Number(chainScore) },
+      });
+
+      return new Response(JSON.stringify({ score: player.score }), {
+        status: 200,
+      });
     }
 
     // update the player score
@@ -223,7 +272,7 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ message: "Invalid request" }), {
       status: 400,
     });
-  }
+  
 }
 
 function calculateHandValue(hand: Card[]): number {

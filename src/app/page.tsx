@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { GameStateProp } from "./api/route";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useSignMessage } from "wagmi";
+import { ABI, CONTRACT_ADDRESS } from "@/constants";
+import { ethers } from "ethers";
 
 export default function Page() {
   const [message, setMessage] = useState<string>("");
@@ -18,7 +20,9 @@ export default function Page() {
   const [isSigned, setIsSigned] = useState<boolean>(false);
 
   const initGame = async () => {
-    const response = await fetch(`/api?address=${address}`, { method: "GET" });
+    const response = await fetch(`/api?address=${address}`, {
+      method: "GET",
+    });
     const data = await response.json();
 
     setData(data);
@@ -27,11 +31,129 @@ export default function Page() {
   const handleAction = async (action: string) => {
     const response = await fetch("/api", {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+      },
       body: JSON.stringify({ action, address }),
     });
     const data = await response.json();
 
     setData(data);
+  };
+  // test transfer
+  const handleTest = async () => {
+    // local transfer
+    const sender = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    const receiver = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
+    const senderKey =
+      "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    const receiverKey =
+      "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+
+    const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545/");
+    const accounts = await provider.send("eth_accounts", []);
+
+    console.log(provider, accounts);
+
+    const senderWallet = new ethers.Wallet(senderKey, provider);
+    const receiverWallet = new ethers.Wallet(receiverKey, provider);
+
+    const senderBalance = await provider.getBalance(senderWallet.address);
+    const receiverBalance = await provider.getBalance(receiverWallet.address);
+    console.log(
+      `Sender balance before transfer: ${ethers.formatEther(senderBalance)} ETH`
+    );
+    console.log(
+      `Receiver balance before transfer: ${ethers.formatEther(
+        receiverBalance
+      )} ETH`
+    );
+    const amount = ethers.parseEther("100");
+
+    console.log(
+      `Sending ${ethers.formatEther(amount)} ETH from ${sender} to ${receiver}`
+    );
+
+    const tx = await senderWallet.sendTransaction({
+      to: receiverWallet.address,
+      value: amount,
+      gasLimit: 21000,
+    });
+
+    await tx.wait();
+
+    console.log(`Transaction: ${tx}`);
+    console.log(`Transfer completed successfully!`);
+
+    const senderBalanceAfter = await provider.getBalance(senderWallet.address);
+    const receiverBalanceAfter = await provider.getBalance(
+      receiverWallet.address
+    );
+    console.log(
+      `Sender balance after transfer: ${ethers.formatEther(
+        senderBalanceAfter
+      )} ETH`
+    );
+    console.log(
+      `Receiver balance after transfer: ${ethers.formatEther(
+        receiverBalanceAfter
+      )} ETH`
+    );
+  };
+
+  const handleClaimToken = async () => {
+    if (score < 1000) {
+      alert("score must be greater than 1000");
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum!);
+      const signer = await provider.getSigner();
+
+      const gasOptions = {
+        gasLimit: 300000,
+      };
+
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+      const balance = await contract.balanceOf(address);
+      console.log(`Player ${address} has ${balance.toString()} tokens.`);
+
+      const updateScoreTx = await contract.updateScore(
+        address,
+        score,
+        gasOptions
+      );
+      const updateScore = await updateScoreTx.wait();
+      console.log("updateScoreTx", updateScore);
+
+      const tx = await contract.claimTokens(address, gasOptions);
+      console.log("Transaction sent:", tx.hash);
+
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed:", receipt);
+
+      const response = await fetch("/api", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")!}`,
+        },
+        body: JSON.stringify({
+          action: "sync_score",
+          address,
+        }),
+      });
+      console.log("response", response);
+
+      if (response.status === 200) {
+        const { score } = await response.json();
+        setScore(score);
+      }
+    } catch (error) {
+      console.error("Claim failed:", error);
+    }
   };
 
   const setData = (data: GameStateProp) => {
@@ -48,8 +170,6 @@ export default function Page() {
       const message = `Welcome to Web3 Blackjack! at ${new Date().toString()}`;
       const signature = await signMessageAsync({ message: message });
 
-      console.log("signature: ", signature);
-
       const response = await fetch("/api", {
         method: "POST",
         body: JSON.stringify({
@@ -61,9 +181,11 @@ export default function Page() {
       });
 
       if (response.status === 200) {
+        const { token } = await response.json();
+        localStorage.setItem("token", token);
+
         setIsSigned(true);
         initGame();
-        console.log("Sign in successfully");
       }
     } catch (error) {
       console.log("Sign in failed", error);
@@ -93,6 +215,12 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-gray-100 py-8">
+      <button
+        className=" bg-amber-400 p-2 rounded-md text-white ml-5"
+        onClick={handleTest}
+      >
+        text transfer
+      </button>
       <div className="flex flex-col justify-center items-center gap-4 px-4 mb-10">
         <ConnectButton />
       </div>
@@ -110,7 +238,14 @@ export default function Page() {
             <span className={score >= 0 ? "text-green-600" : "text-red-600"}>
               Score: {score}
             </span>
+
             <span className="ml-5">{message}</span>
+            <button
+              className=" bg-amber-400 p-2 rounded-md text-white ml-5"
+              onClick={handleClaimToken}
+            >
+              Claim Token
+            </button>
           </h2>
         </div>
 
