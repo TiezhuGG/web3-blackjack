@@ -1,7 +1,12 @@
 // Start the game and get 2 random cards for dealer and player
 // handle the hit and stand and decide who is the winner
 
-import { createPublicClient, createWalletClient, http, verifyMessage } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  verifyMessage,
+} from "viem";
 import prisma from "@/lib/client";
 import jwt from "jsonwebtoken";
 import { hardhat } from "viem/chains";
@@ -72,7 +77,6 @@ export async function GET(request: Request) {
   let player = await prisma.player.findUnique({
     where: { address },
   });
-
 
   // if the player does not exist, create a new player
   if (!player) {
@@ -272,26 +276,26 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({ message: "Invalid request" }), {
       status: 400,
     });
-  
-}
-
-function calculateHandValue(hand: Card[]): number {
-  let value = 0;
-  let acesCount = 0;
-  hand.forEach((card) => {
-    if (card.rank === "A") {
-      acesCount++;
-      value += 11;
-    } else if (card.rank === "J" || card.rank === "Q" || card.rank === "K") {
-      value += 10;
-    } else {
-      value += parseInt(card.rank);
-    }
-  });
-
-  while (value > 21 && acesCount > 0) {
-    value -= 10;
-    acesCount--;
   }
-  return value;
+
+  function calculateHandValue(hand: Card[]): number {
+    let value = 0;
+    let acesCount = 0;
+    hand.forEach((card) => {
+      if (card.rank === "A") {
+        acesCount++;
+        value += 11;
+      } else if (card.rank === "J" || card.rank === "Q" || card.rank === "K") {
+        value += 10;
+      } else {
+        value += parseInt(card.rank);
+      }
+    });
+
+    while (value > 21 && acesCount > 0) {
+      value -= 10;
+      acesCount--;
+    }
+    return value;
+  }
 }
